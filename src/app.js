@@ -154,7 +154,7 @@ app.post('/refresh', async (req, res) => {
     try {
         const existingRefreshToken = req.cookies?.proPlannerRefreshToken;
 
-        if (!existingRefreshToken) return res.status(403).json({ error: "Refresh token missing" });
+        if (!existingRefreshToken) return res.status(404).json({ error: "Refresh token missing" });
 
         const decoded = jwt.verify(existingRefreshToken, process.env.REFRESH_TOKEN_SECRET);
 
@@ -186,7 +186,7 @@ app.get('/auth/verify', (req, res) => {
 
     }catch(error){
         console.error("Error Verifying loggedin status:", error);
-        return res.status(500).json({ error: "Internal Server Error" });
+        return res.status(403).json({ error: 'Invalid or expired token' });
     }
 });
   
