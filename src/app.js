@@ -23,7 +23,7 @@ app.use(cors({
     allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
-app.options("*", cors());
+app.options("*", cors());  // Allow preflight requests
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -705,16 +705,13 @@ app.patch('/home/settings/update-email', async (req, res)=>{
         const isEmailTaken = await credentialCollection.findOne({ email: newEmail });
         if (isEmailTaken) return res.status(409).json({ error: "This email is already in use." });
 
-        const updateResult = await credentialCollection.updateOne({email: currentEmail}, {
+        await credentialCollection.updateOne({email: currentEmail}, {
             $set: {email: newEmail}
         })
-
-        if (updateResult.modifiedCount === 0) return res.status(500).json({ error: "Failed to update email. Please try again." });
 
         res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true });
         res.clearCookie('resendCountdown', { httpOnly: true, sameSite: 'None', secure: true });
         res.status(200).json({message: "Email updated successfully"});
-
 
     }catch(error){
         console.error("Error updating email:", error);
@@ -756,11 +753,9 @@ app.patch('/home/settings/update-password', async (req, res)=>{
         //hashing new password
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         
-        const updateResult = await credentialCollection.updateOne({username: user}, {
+        await credentialCollection.updateOne({username: user}, {
             $set: {password: hashedPassword}
         })
-
-        if (updateResult.modifiedCount === 0) return res.status(500).json({ error: "Failed to change password. Please try again." });
 
         res.status(200).json({message: "Password changes successfully"})
 
