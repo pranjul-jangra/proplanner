@@ -17,9 +17,14 @@ const app = express();
 const client = new MongoClient(process.env.URI);
 
 app.use(cors({
-    origin: process.env.FRONTEND_URI,  // url from which the requests are accepted
+    origin: process.env.FRONTEND_URI,
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"]
 }));
+
+app.options("*", cors());
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
