@@ -87,7 +87,7 @@ app.post('/login', async (req, res)=>{
             const accessToken = jwt.sign({username: user.username}, process.env.ACCESS_TOKEN_SECRET, {expiresIn : '30m'});
             const refreshToken = jwt.sign({username: user.username}, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "15d" });
 
-            res.cookie('proPlannerRefreshToken', refreshToken, {httpOnly: true, sameSite: 'None', maxAge: 15 * 24 * 60 * 60 * 1000});
+            res.cookie('proPlannerRefreshToken', refreshToken, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 24 * 60 * 60 * 1000});
             res.status(200).json({ message: 'Login successful', accessToken, username: user.username });
         }else{
             res.status(400).json({error: 'Invalid Password'});
@@ -140,7 +140,7 @@ app.post('/signup', async (req, res)=>{
         const accessToken = jwt.sign({username: username}, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '30m'});
         const refreshToken = jwt.sign({username: username}, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "15d" });
 
-        res.cookie('proPlannerRefreshToken', refreshToken, {httpOnly: true, sameSite: 'None', maxAge: 15 * 24 * 60 * 60 * 1000});
+        res.cookie('proPlannerRefreshToken', refreshToken, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 24 * 60 * 60 * 1000});
         res.status(201).json({ message: "User registered successfully", accessToken, username: username });
 
     }catch (error) {
@@ -161,7 +161,7 @@ app.post('/refresh', async (req, res) => {
         const newAccessToken =  jwt.sign({ username: decoded.username },process.env.ACCESS_TOKEN_SECRET,{ expiresIn: "30m" });
         const refreshToken = jwt.sign({username: decoded.username}, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "15d" });
 
-        res.cookie('proPlannerRefreshToken', refreshToken, {httpOnly: true, sameSite: 'None', maxAge: 15 * 24 * 60 * 60 * 1000});
+        res.cookie('proPlannerRefreshToken', refreshToken, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 24 * 60 * 60 * 1000});
         res.status(200).json({ accessToken: newAccessToken });
 
     } catch (error) {
@@ -576,7 +576,7 @@ app.patch('/home/settings/update-profile', async ( req, res )=>{
         const newAccessToken = jwt.sign({ username }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "30m" });
         const newRefreshToken = jwt.sign({ username }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "15d" });
 
-        res.cookie('proPlannerRefreshToken', newRefreshToken, {httpOnly: true, sameSite: 'None', maxAge: 15 * 24 * 60 * 60 * 1000 });
+        res.cookie('proPlannerRefreshToken', newRefreshToken, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 24 * 60 * 60 * 1000 });
 
         res.status(200).json({ message: "Profile updated successfully", username, gender,accessToken: newAccessToken });
 
@@ -594,8 +594,8 @@ app.post('/home/settings/generate-otp', async (req,res)=>{
 
         // clear the cookie if the "resend otp" button is making the request to re-generate OTP. 
         if(forceOtpGeneration){
-            res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None' });  // marks the cookies to clear in the next request
-            res.clearCookie('resendCountdown', { httpOnly: true, sameSite: 'None' }); //marks the cookies to clear in the next request
+            res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true });  // marks the cookies to clear in the next request
+            res.clearCookie('resendCountdown', { httpOnly: true, sameSite: 'None', secure: true });
 
         }
         
@@ -644,8 +644,8 @@ app.post('/home/settings/generate-otp', async (req,res)=>{
         
         const resendCountdown = Date.now() + 90 * 1000;
 
-        res.cookie('otpToken', otpToken, {httpOnly: true, sameSite: 'None', maxAge: 15 * 60 * 1000});
-        res.cookie('resendCountdown', resendCountdown, {httpOnly: true, sameSite: 'None', maxAge: 15 * 60 * 1000})
+        res.cookie('otpToken', otpToken, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 60 * 1000});
+        res.cookie('resendCountdown', resendCountdown, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 60 * 1000})
         res.status(200).json({message: "OTP has been sent to your email.", resendCountdown});
 
     }catch(error){
@@ -669,8 +669,8 @@ app.post('/home/settings/verify-otp', async (req, res) => {
         if (decoded.email !== email) return res.status(400).json({ error: "Email mismatch." });
         if (decoded.otp !== otp) return res.status(400).json({ error: "Invalid OTP." });
         
-        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None' });
-        res.clearCookie('resendCountdown', { httpOnly: true, sameSite: 'None' });
+        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true });
+        res.clearCookie('resendCountdown', { httpOnly: true, sameSite: 'None', secure: true });
         
         return res.status(200).json({ message: "OTP verified successfully." });
         
@@ -706,8 +706,8 @@ app.patch('/home/settings/update-email', async (req, res)=>{
 
         if (updateResult.modifiedCount === 0) return res.status(500).json({ error: "Failed to update email. Please try again." });
 
-        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None' });
-        res.clearCookie('resendCountdown', { httpOnly: true, sameSite: 'None' });
+        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true });
+        res.clearCookie('resendCountdown', { httpOnly: true, sameSite: 'None', secure: true });
         res.status(200).json({message: "Email updated successfully"});
 
 
@@ -769,10 +769,10 @@ app.patch('/home/settings/update-password', async (req, res)=>{
 // LOGGING OUT THE USER:
 app.post('/home/settings/logout', async (req, res)=>{
     try{
-        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None' });
-        res.clearCookie('resendCountdown', { httpOnly: true, sameSite: 'None' });
+        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true });
+        res.clearCookie('resendCountdown', { httpOnly: true, sameSite: 'None', secure: true });
 
-        res.clearCookie('proPlannerRefreshToken', { httpOnly: true, sameSite: 'None' })
+        res.clearCookie('proPlannerRefreshToken', { httpOnly: true, sameSite: 'None', secure: true })
 
         res.status(200).json({ message: "Logged out successfully" });
     
@@ -800,7 +800,7 @@ app.delete('/home/settings/delete-account', async (req, res)=>{
         if(!isVerified) return res.status(400).json({error: "Invalid password"});
         if(user.username !== username) return res.status(400).json({error: "Something went wrong. Please try again after some time."});
 
-        res.clearCookie( 'proPlannerRefreshToken', { httpOnly: true, sameSite: 'None' } );
+        res.clearCookie( 'proPlannerRefreshToken', { httpOnly: true, sameSite: 'None', secure: true } );
         await credentialCollection.deleteOne({username}); 
         await dataCollection.deleteMany({username});
 
