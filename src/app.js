@@ -102,7 +102,7 @@ app.post('/login', async (req, res) => {
         const isVerified = await bcrypt.compare(password, user.password);
         if (!isVerified) return res.status(400).json({ error: 'Invalid Password' });
 
-        const deviceId = req.body.deviceId || generateUniqueId();
+        const deviceId = req.body.uniqueId || generateUniqueId();
 
         const accessToken = jwt.sign({ username: user.username, deviceId }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '30m' });
         const refreshToken = jwt.sign({ username: user.username, deviceId }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "15d" });
@@ -157,7 +157,7 @@ app.post('/signup', async (req, res)=>{
 
         await credentialCollection.insertOne({username, email, gender, password: hashedPassword});
 
-        const deviceId = req.body.deviceId || generateUniqueId();
+        const deviceId = req.body.uniqueId || generateUniqueId();
 
         const accessToken = jwt.sign({ username, deviceId }, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '30m'});
         const refreshToken = jwt.sign({ username, deviceId }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "15d" });
@@ -770,7 +770,8 @@ app.patch('/home/settings/update-password', async (req, res)=>{
 
 // LOGGING OUT THE USER:
 app.post('/home/settings/logout', async (req, res)=>{
-    const { deviceId } = req.body;
+    const { uniqueId } = req.body;
+    const deviceId = uniqueId;
     const token = req.headers.authorization?.split(" ")[1];
 
     if(!deviceId || !token) return res.status(400).json({error: "Missing authentication details"});
@@ -798,11 +799,11 @@ app.post('/home/settings/logout', async (req, res)=>{
 })
 
 // DELETING USER ACCOUNT:
-app.delete('/home/settings/delete-account', async (req, res)=>{
+app.post('/home/settings/delete-account', async (req, res)=>{
     try{
-        const {username, password, deviceId} = req.query;
+        const { username, password } = req.body;
 
-        if(!username || !password || !deviceId) return res.status(400).json({error: 'All fields are required'});
+        if(!username || !password) return res.status(400).json({error: 'All fields are required'});
 
         await connectToDatabase();
 
