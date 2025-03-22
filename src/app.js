@@ -1,5 +1,5 @@
 import express from "express";
-import crypto from "crypto";
+import crypto ,{ randomUUID } from "crypto";
 import { MongoClient, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -70,35 +70,50 @@ async function createIndex(collection) {
     if (!usernameIndexExists) { await collection.createIndex({ username: 1 }, { unique: true }) }
 }
 
+
+const generateUniqueId = () => randomUUID();
+
+async function updateUserLoginDevices(username, deviceId, refreshToken) {
+    credentialCollection = db.collection('userCredentials');
+    
+    await credentialCollection.updateOne(
+        { username },
+        { $push: { activeDevices: { deviceId, refreshToken } } }
+    );
+}
+
 //-------------------------------------------------------------------------------------------------------------------------------------
 //---------------------------------------------------AUTHENTICATION ROUTES-------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------------------------
 
 // LOGIN ROUTE
-app.post('/login', async (req, res)=>{
-    try{
+app.post('/login', async (req, res) => {
+    try {
         await connectToDatabase();
         const { username, password } = req.body;
-
+        
         if (!username || !password) return res.status(400).json({ error: 'All fields are required' });
+        
+        const credentialCollection = db.collection('userCredentials');
+        
+        const user = await credentialCollection.findOne({ username });
+        if (!user || !user.password) return res.status(404).json({ error: 'This username does not exist.' });
 
-        credentialCollection = await db.collection('userCredentials');
-
-        const user =  await credentialCollection.findOne({username});
-        if(!user || !user.password) return res.status(404).json({ error: 'This username does not exist.' });
         const isVerified = await bcrypt.compare(password, user.password);
+        if (!isVerified) return res.status(400).json({ error: 'Invalid Password' });
 
-        if(isVerified){
-            const accessToken = jwt.sign({username: user.username}, process.env.ACCESS_TOKEN_SECRET, {expiresIn : '30m'});
-            const refreshToken = jwt.sign({username: user.username}, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "15d" });
+        const deviceId = req.body.deviceId || generateUniqueId();
 
-            res.cookie('proPlannerRefreshToken', refreshToken, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 24 * 60 * 60 * 1000});
-            res.status(200).json({ message: 'Login successful', accessToken, username: user.username });
-        }else{
-            res.status(400).json({error: 'Invalid Password'});
-        }
+        const accessToken = jwt.sign({ username: user.username, deviceId }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '30m' });
+        const refreshToken = jwt.sign({ username: user.username, deviceId }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "15d" });
 
-    }catch (error) {
+        await updateUserLoginDevices(user.username, deviceId, refreshToken);
+
+        res.cookie('proPlannerRefreshToken', refreshToken, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 24 * 60 * 60 * 1000 });
+
+        res.status(200).json({ message: 'Login successful', accessToken, username: user.username, deviceId});
+
+    } catch (error) {
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -142,11 +157,15 @@ app.post('/signup', async (req, res)=>{
 
         await credentialCollection.insertOne({username, email, gender, password: hashedPassword});
 
-        const accessToken = jwt.sign({username: username}, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '30m'});
-        const refreshToken = jwt.sign({username: username}, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "15d" });
+        const deviceId = req.body.deviceId || generateUniqueId();
+
+        const accessToken = jwt.sign({ username, deviceId }, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '30m'});
+        const refreshToken = jwt.sign({ username, deviceId }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "15d" });
+
+        await updateUserLoginDevices(username, deviceId, refreshToken);
 
         res.cookie('proPlannerRefreshToken', refreshToken, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 24 * 60 * 60 * 1000});
-        res.status(201).json({ message: "User registered successfully", accessToken, username: username });
+        res.status(201).json({ message: "User registered successfully", accessToken, username, deviceId });
 
     }catch (error) {
         res.status(500).json({ error: "Internal Server Error" });
@@ -185,7 +204,7 @@ app.get('/auth/verify', (req, res) => {
 
         const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
 
-        if(!decoded) return res.status(403).json({ error: 'Invalid or expired token' });
+        if(!decoded || !decoded.deviceId) return res.status(403).json({ error: 'Invalid or expired token' });
 
         res.status(200).json({ message: 'User verified', user: decoded });
 
@@ -751,10 +770,23 @@ app.patch('/home/settings/update-password', async (req, res)=>{
 
 // LOGGING OUT THE USER:
 app.post('/home/settings/logout', async (req, res)=>{
-    try{
-        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true });
-        res.clearCookie('resendCountdown', { httpOnly: true, sameSite: 'None', secure: true });
+    const { deviceId } = req.body;
+    const token = req.headers.authorization?.split(" ")[1];
 
+    if(!deviceId || !token) return res.status(400).json({error: "Missing authentication details"});
+
+    try{
+        const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+        if (!decoded) return res.status(403).json({ error: "Invalid or expired token" });
+
+        credentialCollection = await db.collection('userCredentials');
+
+        await credentialCollection.updateOne(
+            { username: decoded.username },
+            { $pull: { devices: { deviceId } } }
+        );
+
+        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true });
         res.clearCookie('proPlannerRefreshToken', { httpOnly: true, sameSite: 'None', secure: true })
 
         res.status(200).json({ message: "Logged out successfully" });
@@ -768,22 +800,24 @@ app.post('/home/settings/logout', async (req, res)=>{
 // DELETING USER ACCOUNT:
 app.delete('/home/settings/delete-account', async (req, res)=>{
     try{
-        const {username, password} = req.query;
+        const {username, password, deviceId} = req.query;
 
-        if(!username, !password) return res.status(400).json({error: 'All fields are required'});
+        if(!username || !password || !deviceId) return res.status(400).json({error: 'All fields are required'});
 
         await connectToDatabase();
 
         credentialCollection = await db.collection('userCredentials');
         dataCollection = await db.collection('userData');
 
-        const user = await credentialCollection.findOne({username}, { projection: { username: 1, password: 1 } });
+        const user = await credentialCollection.findOne({username}, { projection: { password: 1, devices: 1 } });
+        if (!user) return res.status(404).json({ error: 'User not found' });
         
         const isVerified = bcrypt.compareSync(password, user.password);
         if(!isVerified) return res.status(400).json({error: "Invalid password"});
-        if(user.username !== username) return res.status(400).json({error: "Something went wrong. Please try again after some time."});
 
         res.clearCookie( 'proPlannerRefreshToken', { httpOnly: true, sameSite: 'None', secure: true } );
+        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true });
+
         await credentialCollection.deleteOne({username}); 
         await dataCollection.deleteMany({username});
 
