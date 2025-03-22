@@ -594,20 +594,8 @@ app.patch('/home/settings/update-profile', async ( req, res )=>{
 // OTP VERIFICATION ROUTES:
 app.post('/home/settings/generate-otp', async (req,res)=>{
     try{
-        const { email, forceOtpGeneration } = req.body;
+        const { email } = req.body;
         if(!email) return res.status(400).json({error: "Email is missing."});
-
-        // clear the cookie if the "resend otp" button is making the request to re-generate OTP. 
-        if(forceOtpGeneration){
-            res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true });  // marks the cookies to clear in the next request
-            res.clearCookie('resendCountdown', { httpOnly: true, sameSite: 'None', secure: true });
-
-        }
-        
-        if(!forceOtpGeneration && req.cookies?.otpToken) {    // Checks for any active OTP
-            const resendCountdown = req.cookies?.resendCountdown ? parseInt(req.cookies.resendCountdown) : 0;
-            return res.status(429).json({ error: "Please enter the otp send to your email.", resendCountdown });
-        }
         
         // generates new otp if previous one is used or expired
         const otp = crypto.randomInt(100000, 999999).toString();
@@ -646,11 +634,8 @@ app.post('/home/settings/generate-otp', async (req,res)=>{
             console.error("Email sending failed:", mailError);
             return res.status(500).json({ error: "Failed to send OTP to your email." });
         }
-        
-        const resendCountdown = Date.now() + 90 * 1000;
 
         res.cookie('otpToken', otpToken, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 60 * 1000});
-        res.cookie('resendCountdown', resendCountdown, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 60 * 1000})
         res.status(200).json({message: "OTP has been sent to your email.", resendCountdown});
 
     }catch(error){
@@ -675,7 +660,6 @@ app.post('/home/settings/verify-otp', async (req, res) => {
         if (decoded.otp !== otp) return res.status(400).json({ error: "Invalid OTP." });
         
         res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true });
-        res.clearCookie('resendCountdown', { httpOnly: true, sameSite: 'None', secure: true });
         
         return res.status(200).json({ message: "OTP verified successfully." });
         
@@ -710,7 +694,6 @@ app.patch('/home/settings/update-email', async (req, res)=>{
         })
 
         res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true });
-        res.clearCookie('resendCountdown', { httpOnly: true, sameSite: 'None', secure: true });
         res.status(200).json({message: "Email updated successfully"});
 
     }catch(error){
