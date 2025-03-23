@@ -56,7 +56,6 @@ async function connectToDatabase(){
         await client.connect();
         db = client.db(process.env.DATABASE);
     }catch(error){
-        console.error("Database connection failed:", error.message);
         throw error;
     }
 }
@@ -109,7 +108,7 @@ app.post('/login', async (req, res) => {
 
         await updateUserLoginDevices(user.username, deviceId, refreshToken);
 
-        res.cookie('proPlannerRefreshToken', refreshToken, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 24 * 60 * 60 * 1000 });
+        res.cookie('proPlannerRefreshToken', refreshToken, {httpOnly: true, sameSite: 'None', secure: true, partitioned: true, maxAge: 15 * 24 * 60 * 60 * 1000 });
 
         res.status(200).json({ message: 'Login successful', accessToken, username: user.username, deviceId});
 
@@ -164,7 +163,7 @@ app.post('/signup', async (req, res)=>{
 
         await updateUserLoginDevices(username, deviceId, refreshToken);
 
-        res.cookie('proPlannerRefreshToken', refreshToken, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 24 * 60 * 60 * 1000});
+        res.cookie('proPlannerRefreshToken', refreshToken, {httpOnly: true, sameSite: 'None', secure: true, partitioned: true, maxAge: 15 * 24 * 60 * 60 * 1000});
         res.status(201).json({ message: "User registered successfully", accessToken, username, deviceId });
 
     }catch (error) {
@@ -185,7 +184,7 @@ app.post('/refresh', async (req, res) => {
         const newAccessToken =  jwt.sign({ username: decoded.username },process.env.ACCESS_TOKEN_SECRET,{ expiresIn: "30m" });
         const refreshToken = jwt.sign({username: decoded.username}, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "15d" });
 
-        res.cookie('proPlannerRefreshToken', refreshToken, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 24 * 60 * 60 * 1000});
+        res.cookie('proPlannerRefreshToken', refreshToken, {httpOnly: true, sameSite: 'None', secure: true, partitioned: true, maxAge: 15 * 24 * 60 * 60 * 1000});
         res.status(200).json({ accessToken: newAccessToken });
 
     } catch (error) {
@@ -200,16 +199,13 @@ app.post('/refresh', async (req, res) => {
 app.get('/auth/verify', (req, res) => {
     try{
         const token = req.headers?.authorization?.split(' ')[1];
-        if (!token) return res.status(403).json({ error: 'Unauthorized' });
+        if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
         const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-
-        if(!decoded || !decoded.deviceId) return res.status(403).json({ error: 'Invalid or expired token' });
 
         res.status(200).json({ message: 'User verified', user: decoded });
 
     }catch(error){
-        console.error("Error Verifying loggedin status:", error);
         return res.status(403).json({ error: 'Invalid or expired token' });
     }
 });
@@ -268,7 +264,6 @@ app.post('/forgot-password', async (req, res) => {
         res.status(200).json({ message: "Password reset link sent to your email" });
 
     } catch (error) {
-        console.error(error.message);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -306,7 +301,6 @@ app.post('/reset-password', async (req, res) => {
         res.status(200).json({ message: "Password reset successful" });
 
     } catch (error) {
-        console.error(error.message);
         res.status(500).json({ error: "Invalid or expired token" });
     }
 });
@@ -379,7 +373,6 @@ app.delete('/home/delete', async (req, res)=>{
         }
 
     }catch(error){
-        console.error("Error deleting task:", error);
         res.status(500).json({ error: 'Internal Server Error' })
     }
 })
@@ -406,7 +399,6 @@ app.patch('/home/edit', async (req, res)=>{
         res.status(200).json({ message: 'Task updated successfully' });
 
     }catch(error){
-        console.error("Error updating task:", error);
         res.status(500).json({ error: 'Internal Server Error' })
     }
 })
@@ -431,7 +423,6 @@ app.patch('/home/markascomplete', async (req, res)=>{
         res.status(200).json({ message: 'Task updated successfully' });
 
     }catch(error){
-        console.error("Error marking task as completed:", error)
         res.status(500).json({error: "Internal Server Error"})
     }
 })
@@ -455,7 +446,6 @@ app.get('/home/settings/user-profile', async (req, res)=>{
         res.json({userData});
 
     }catch(error){
-        console.log("Error fetching user:", error);
         res.status(500).json({error: "Internal Server Error"});
     }
 });
@@ -485,7 +475,6 @@ app.delete('/home/settings/empty-tasks', async (req, res)=>{
         }
 
     }catch(error){
-        console.error("Error emptying daily tasks:", error);
         res.status(500).json({error: "Internal Server Error"});
     }
 });
@@ -557,7 +546,6 @@ app.post('/home/settings/submit-feedback', async (req, res) => {
 
         res.status(200).json({ message: 'Feedback submitted successfully!' });
     } catch (error) {
-        console.error('Error sending email:', error);
         res.status(500).json({ error: 'Failed to send feedback' });
     }
 });
@@ -600,12 +588,11 @@ app.patch('/home/settings/update-profile', async ( req, res )=>{
         const newAccessToken = jwt.sign({ username }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "30m" });
         const newRefreshToken = jwt.sign({ username }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "15d" });
 
-        res.cookie('proPlannerRefreshToken', newRefreshToken, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 24 * 60 * 60 * 1000 });
+        res.cookie('proPlannerRefreshToken', newRefreshToken, {httpOnly: true, sameSite: 'None', secure: true, partitioned: true, maxAge: 15 * 24 * 60 * 60 * 1000 });
 
         res.status(200).json({ message: "Profile updated successfully", username, gender,accessToken: newAccessToken });
 
     }catch(error){
-        console.error("Error Updating Profile Info:", error);
         res.status(500).json({error: "Failed to update profile"});
     }
 })
@@ -650,15 +637,13 @@ app.post('/home/settings/generate-otp', async (req,res)=>{
         try {
             await transporter.sendMail(mailOptions);
         } catch (mailError) {
-            console.error("Email sending failed:", mailError);
             return res.status(500).json({ error: "Failed to send OTP to your email." });
         }
 
-        res.cookie('otpToken', otpToken, {httpOnly: true, sameSite: 'None', secure: true, maxAge: 15 * 60 * 1000});
-        res.status(200).json({message: "OTP has been sent to your email.", resendCountdown});
+        res.cookie('otpToken', otpToken, {httpOnly: true, sameSite: 'None', secure: true, partitioned: true, maxAge: 15 * 60 * 1000});
+        res.status(200).json({message: "OTP has been sent to your email."});
 
     }catch(error){
-        console.error("Error generating otp:", error);
         res.status(500).json({error: "Failed to generate otp. Please try again later."});
     }
 });
@@ -678,7 +663,7 @@ app.post('/home/settings/verify-otp', async (req, res) => {
         if (decoded.email !== email) return res.status(400).json({ error: "Email mismatch." });
         if (decoded.otp !== otp) return res.status(400).json({ error: "Invalid OTP." });
         
-        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true });
+        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true, partitioned: true });
         
         return res.status(200).json({ message: "OTP verified successfully." });
         
@@ -687,7 +672,6 @@ app.post('/home/settings/verify-otp', async (req, res) => {
       }
       
     } catch (error) {
-      console.error("Error verifying OTP:", error);
       res.status(500).json({ error: "Failed to verify OTP. Please try again later." });
     }
 });
@@ -712,11 +696,10 @@ app.patch('/home/settings/update-email', async (req, res)=>{
             $set: {email: newEmail}
         })
 
-        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true });
+        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true, partitioned: true });
         res.status(200).json({message: "Email updated successfully"});
 
     }catch(error){
-        console.error("Error updating email:", error);
         res.status(500).json({error: "Something went wrong. Failed to update email."});
     }
 });
@@ -762,7 +745,6 @@ app.patch('/home/settings/update-password', async (req, res)=>{
         res.status(200).json({message: "Password changes successfully"})
 
     }catch(error){
-        console.error("Error updating password:", error);
         res.status(500).json({error: "Something went wrong. Failed to update password."});
     }
 })
@@ -778,22 +760,21 @@ app.post('/home/settings/logout', async (req, res)=>{
 
     try{
         const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-        if (!decoded) return res.status(403).json({ error: "Invalid or expired token" });
 
+        await connectToDatabase()
         credentialCollection = await db.collection('userCredentials');
 
         await credentialCollection.updateOne(
             { username: decoded.username },
-            { $pull: { devices: { deviceId } } }
+            { $pull: { activeDevices: { deviceId } } }
         );
 
-        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true });
-        res.clearCookie('proPlannerRefreshToken', { httpOnly: true, sameSite: 'None', secure: true })
+        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true, partitioned: true });
+        res.clearCookie('proPlannerRefreshToken', { httpOnly: true, sameSite: 'None', secure: true, partitioned: true })
 
         res.status(200).json({ message: "Logged out successfully" });
     
     }catch(error){
-        console.error("Error logging out user:", error);
         res.status(500).json({error: "Something went wrong. Failed to log out."});
     }
 })
@@ -810,14 +791,14 @@ app.post('/home/settings/delete-account', async (req, res)=>{
         credentialCollection = await db.collection('userCredentials');
         dataCollection = await db.collection('userData');
 
-        const user = await credentialCollection.findOne({username}, { projection: { password: 1, devices: 1 } });
+        const user = await credentialCollection.findOne({username}, { projection: { password: 1, activeDevices: 1 } });
         if (!user) return res.status(404).json({ error: 'User not found' });
         
-        const isVerified = bcrypt.compareSync(password, user.password);
-        if(!isVerified) return res.status(400).json({error: "Invalid password"});
+        const isVerified = await bcrypt.compare(password, user.password);
+        if(!isVerified) return res.status(401).json({error: "Invalid password"});
 
-        res.clearCookie( 'proPlannerRefreshToken', { httpOnly: true, sameSite: 'None', secure: true } );
-        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true });
+        res.clearCookie( 'proPlannerRefreshToken', { httpOnly: true, sameSite: 'None', secure: true, partitioned: true } );
+        res.clearCookie('otpToken', { httpOnly: true, sameSite: 'None', secure: true, partitioned: true });
 
         await credentialCollection.deleteOne({username}); 
         await dataCollection.deleteMany({username});
@@ -825,7 +806,6 @@ app.post('/home/settings/delete-account', async (req, res)=>{
         res.status(200).json({message: "Account deleted"});        
 
     }catch(error){
-        console.error('Error Deleting Account:', error);
         res.status(500).json({error: "Failed to delete account"});
     }
 })
