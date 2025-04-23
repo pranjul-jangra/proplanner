@@ -14,7 +14,6 @@ import cookieParser from "cookie-parser";
 
 dotenv.config();
 const app = express();
-const client = new MongoClient(process.env.URI);
 
 app.use(cors({
     origin: process.env.FRONTEND_URI,
@@ -50,7 +49,10 @@ const verifyToken = (req, res, next) => {
 //------------------------------------------------DATABASE CONNECTION AND VARIABLES----------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------------------------
 
+const client = new MongoClient(process.env.URI);
+
 let db, credentialCollection, dataCollection, feedbackCollection;
+
 async function connectToDatabase(){
     try{
         await client.connect();
@@ -234,7 +236,7 @@ app.post('/forgot-password', async (req, res) => {
             }
         });
 
-        const resetLink = `http://localhost:5173/reset-password/${encodeURIComponent(resetToken)}`;
+        const resetLink = `${process.env.FRONTEND_URI}${encodeURIComponent(resetToken)}`;
 
         const mailOptions = {
             from: process.env.MY_EMAIL,
