@@ -29,22 +29,6 @@ app.use(express.json());
 app.use(cookieParser());
 
 
-// MIDDLEWARE TO AUTHORIZE THE USER
-const verifyToken = (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: "No token provided" });
-
-    const token = authHeader.split(' ')[1];
-
-    try {
-        const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-        req.user = decoded; // Attach user data to request
-        next();
-    } catch (error) {
-        return res.status(403).json({ message: "Invalid or expired token" });
-    }
-};
-
 //-------------------------------------------------------------------------------------------------------------------------------------
 //------------------------------------------------DATABASE CONNECTION AND VARIABLES----------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------------------------
@@ -115,6 +99,7 @@ app.post('/login', async (req, res) => {
         res.status(200).json({ message: 'Login successful', accessToken, username: user.username, deviceId});
 
     } catch (error) {
+        console.log("Error logging in:", error);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -123,9 +108,9 @@ app.post('/login', async (req, res) => {
 app.post('/signup', async (req, res)=>{
     try{
         await connectToDatabase();
-        const { username, email, gender, password } = req.body;
+        const { username, email, password } = req.body;
 
-        if (!username || !email || !gender || !password) return res.status(400).json({ error: 'All fields are required' });
+        if (!username || !email || !password) return res.status(400).json({ error: 'All fields are required' });
 
         const collections = await db.listCollections({}, { nameOnly: true }).toArray();
         const credentialsCollectionExists = collections.some(col => col.name === 'userCredentials');
@@ -156,7 +141,7 @@ app.post('/signup', async (req, res)=>{
         // inserting new credentials
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        await credentialCollection.insertOne({username, email, gender, password: hashedPassword});
+        await credentialCollection.insertOne({username, email, password: hashedPassword});
 
         const deviceId = req.body.uniqueId || generateUniqueId();
 
@@ -169,6 +154,7 @@ app.post('/signup', async (req, res)=>{
         res.status(201).json({ message: "User registered successfully", accessToken, username, deviceId });
 
     }catch (error) {
+        console.log("Error signing up:", error);
         res.status(500).json({ error: "Internal Server Error" });
     }    
 });
@@ -554,10 +540,8 @@ app.post('/home/settings/submit-feedback', async (req, res) => {
 
 app.patch('/home/settings/update-profile', async ( req, res )=>{
     try{
-        const { user, dataToEdit } = req.body;  
-        const { username, gender } = dataToEdit;
-        
-        if(!username || !gender) return res.status(400).json({error: 'You submitted an empty field'});
+        const { user, username } = req.body;  
+        if(!username) return res.status(400).json({error: 'You submitted an empty field'});
 
         await connectToDatabase();
         credentialCollection = await db.collection('userCredentials');
@@ -568,17 +552,12 @@ app.patch('/home/settings/update-profile', async ( req, res )=>{
         if(anotherUserWithSameCredentials) return res.status(409).json({error: "Profile can't be updated. Please use a different username."});
 
         // TO CHECK IF THE USER SUBMITS IT'S CURRENT INFORMATION (NO CHANGES):
-        const userToUpdate = await credentialCollection.findOne({username: user}, { projection:{ username:1, gender:1 } });
-        if(
-            username === userToUpdate.username &&
-            gender === userToUpdate.gender
-        ){
-            return res.status(409).json({error: "No change detected"});
-        }
+        const userToUpdate = await credentialCollection.findOne({username: user}, { projection:{ username:1 } });
+        if( username === userToUpdate.username ) return res.status(409).json({error: "No change detected"});
 
         await credentialCollection.updateOne(
             { username: user },
-            { $set: { username, gender } }
+            { $set: { username } }
         );
 
         await dataCollection.updateMany(
@@ -591,10 +570,10 @@ app.patch('/home/settings/update-profile', async ( req, res )=>{
         const newRefreshToken = jwt.sign({ username }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "15d" });
 
         res.cookie('proPlannerRefreshToken', newRefreshToken, {httpOnly: true, sameSite: 'None', secure: true, partitioned: true, maxAge: 15 * 24 * 60 * 60 * 1000 });
-
-        res.status(200).json({ message: "Profile updated successfully", username, gender,accessToken: newAccessToken });
+        res.status(200).json({ message: "Profile updated successfully", username, accessToken: newAccessToken });
 
     }catch(error){
+        console.log("Error updating username:", error);
         res.status(500).json({error: "Failed to update profile"});
     }
 })
@@ -820,3 +799,6 @@ app.post('/home/settings/delete-account', async (req, res)=>{
 app.listen(process.env.PORT, ()=>{
     console.log('server is running...' )
 })
+
+
+// 822
